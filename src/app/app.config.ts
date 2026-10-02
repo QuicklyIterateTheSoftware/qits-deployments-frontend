@@ -19,24 +19,26 @@ import { routes } from './app.routes';
  *   project's deployments bookmarkable.
  * - `withFetch` is not a preference. The default XHR backend is invisible to OTLP fetch
  *   instrumentation, so choosing it would quietly forfeit client spans the moment this deployment
- *   grows a telemetry relay. Every call this app makes is a same-origin path on this service's own
- *   host, which is what lets the browser's session cookie reach `/projects/api/…` with no machine
- *   token and no CORS — the edge path-routes every application's segment on every vhost.
+ *   grows a telemetry relay. This app's own reads (`/deployments/api/…`) are same-origin paths and
+ *   carry no credential; a read of another application's API goes to that application's own origin
+ *   from the navigation below, with the session.
  * - `provideQitsNavigation` gives `QitsMainLayout` its left navigation, by asking the edge for
  *   `/main-navigation` once at startup. The list is the edge's answer now — derived from the
  *   deployments it actually serves — not a list compiled into @qits/ui-components; without this
  *   provider the chrome renders no links at all. It needs the `provideHttpClient` above.
- * - `provideQitsProjects` fills the chrome's project picker from one `GET /projects/api/projects`,
- *   and installs the repositories of whatever project is in scope alongside it.
+ * - `provideQitsProjects` fills the chrome's project picker from one `GET /projects/api/projects` on
+ *   qits-projects' own origin, which the library reads from the navigation, and installs the
+ *   repositories of whatever project is in scope alongside it.
  * - `provideQitsScope('project')` says how deep this application's own addresses go. This page is
  *   one table of every environment's deployments, which a project expands rather than divides, so
  *   the deepest address it serves is `/<projectSlug>/`. The scope seeds the page's expansion: a
  *   reader who arrives inside a project finds that project already open.
  * - `provideQitsBuilds` puts the pending-builds bolt beside the picker: a popover of what qits-ci is
- *   building right now, from `GET /ci/api/runs/active`. Same-origin like every other read here — the
- *   edge routes `/ci` on every vhost — so it needs the `provideHttpClient` above and names no origin
- *   of its own. Providing it is what puts the bolt there, exactly as no project source means no
- *   picker. Closed, it asks nothing at all; it polls only while a reader keeps the panel open.
+ *   building right now, from `GET /ci/api/runs/active` on qits-ci's own origin, which the library
+ *   reads from the navigation — the edge routes `/ci` on qits-ci's host only — so it needs the
+ *   `provideHttpClient` above and this app composes no hostname. Providing it is what puts the bolt
+ *   there, exactly as no project source means no picker. Closed, it asks nothing at all; it polls
+ *   only while a reader keeps the panel open.
  */
 export const appConfig: ApplicationConfig = {
   providers: [
