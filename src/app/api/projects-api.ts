@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
+import { QitsAppLinks } from '@qits/ui-components';
 import { firstValueFrom } from 'rxjs';
-import { QITS_API_BASE } from './api-base';
 import type {
   ProjectDto,
   ProjectEntriesResponse,
@@ -12,6 +12,12 @@ import type {
 /**
  * What this app reads from qits-projects: the project spine of the front page, and one field of a
  * release request.
+ *
+ * qits-projects answers on its own host, not this one: the edge routes an application's paths on
+ * that application's host only. So every call here goes to `applications['qits-projects'].origin`
+ * from the edge's `/main-navigation`, carries the session (`withCredentials`), and waits for the
+ * navigation to answer rather than firing a relative path at this host first. Where the navigation
+ * names no origin the path stays relative, same-origin — what an older edge still routes.
  *
  * Two methods, and still not the whole surface. qits-spa-ci's copy of this service also fetches a
  * project's repositories, because its tree walks down to them; this app never does — the front
@@ -32,13 +38,18 @@ import type {
 @Injectable({ providedIn: 'root' })
 export class ProjectsApi {
   private readonly http = inject(HttpClient);
+  private readonly links = inject(QitsAppLinks);
 
-  private readonly base = inject(QITS_API_BASE);
+  /** `path` on qits-projects' own origin, once the navigation has said where that is. */
+  private url(path: string): Promise<string> {
+    return this.links.whenApiUrl('qits-projects', path);
+  }
 
   /** Every project. One request, on page load, and the spine everything else hangs from. */
   async projects(): Promise<readonly ProjectDto[]> {
+    const url = await this.url('/projects/api/projects');
     const response = await firstValueFrom(
-      this.http.get<ProjectEntriesResponse>(`${this.base}/projects/api/projects`),
+      this.http.get<ProjectEntriesResponse>(url, { withCredentials: true }),
     );
     return response.entries.map((entry) => entry.project);
   }
@@ -59,10 +70,11 @@ export class ProjectsApi {
    * everything above the merge is qits-deployments' own answer and stands without this.
    */
   async releaseRequests(repoId: string): Promise<readonly ProjectsReleaseRequestDto[]> {
+    const url = await this.url(
+      `/projects/api/repositories/${encodeURIComponent(repoId)}/release-requests?state=RELEASED`,
+    );
     const response = await firstValueFrom(
-      this.http.get<ProjectsReleaseRequestsResponse>(
-        `${this.base}/projects/api/repositories/${encodeURIComponent(repoId)}/release-requests?state=RELEASED`,
-      ),
+      this.http.get<ProjectsReleaseRequestsResponse>(url, { withCredentials: true }),
     );
     return response.requests;
   }
