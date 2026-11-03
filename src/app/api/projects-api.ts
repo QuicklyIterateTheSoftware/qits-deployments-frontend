@@ -15,9 +15,10 @@ import type {
  *
  * qits-projects answers on its own host, not this one: the edge routes an application's paths on
  * that application's host only. So every call here goes to `applications['qits-projects'].origin`
- * from the edge's `/main-navigation`, carries the session (`withCredentials`), and waits for the
- * navigation to answer rather than firing a relative path at this host first. Where the navigation
- * names no origin the path stays relative, same-origin — what an older edge still routes.
+ * from the edge's `/main-navigation`, carries the bearer (`qitsBearerInterceptor` signs any
+ * platform host, not only this one), and waits for the navigation to answer rather than firing a
+ * relative path at this host first. Where the navigation names no origin the path stays relative,
+ * same-origin — what an older edge still routes.
  *
  * Two methods, and still not the whole surface. qits-spa-ci's copy of this service also fetches a
  * project's repositories, because its tree walks down to them; this app never does — the front
@@ -48,9 +49,7 @@ export class ProjectsApi {
   /** Every project. One request, on page load, and the spine everything else hangs from. */
   async projects(): Promise<readonly ProjectDto[]> {
     const url = await this.url('/projects/api/projects');
-    const response = await firstValueFrom(
-      this.http.get<ProjectEntriesResponse>(url, { withCredentials: true }),
-    );
+    const response = await firstValueFrom(this.http.get<ProjectEntriesResponse>(url));
     return response.entries.map((entry) => entry.project);
   }
 
@@ -73,9 +72,7 @@ export class ProjectsApi {
     const url = await this.url(
       `/projects/api/repositories/${encodeURIComponent(repoId)}/release-requests?state=RELEASED`,
     );
-    const response = await firstValueFrom(
-      this.http.get<ProjectsReleaseRequestsResponse>(url, { withCredentials: true }),
-    );
+    const response = await firstValueFrom(this.http.get<ProjectsReleaseRequestsResponse>(url));
     return response.requests;
   }
 }

@@ -1,5 +1,5 @@
 import { provideBrowserGlobalErrorListeners, type ApplicationConfig } from '@angular/core';
-import { provideHttpClient, withFetch } from '@angular/common/http';
+import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import {
   provideQitsBuilds,
@@ -7,11 +7,12 @@ import {
   provideQitsProjects,
   provideQitsScope,
 } from '@qits/ui-components';
+import { provideQitsBearerSignIn, qitsBearerInterceptor } from '@qits/angular';
 
 import { routes } from './app.routes';
 
 /**
- * Seven providers, in the order every sibling repeats.
+ * Nine providers.
  *
  * - `provideBrowserGlobalErrorListeners` funnels genuinely-global errors and unhandled rejections
  *   into Angular's `ErrorHandler`.
@@ -19,9 +20,14 @@ import { routes } from './app.routes';
  *   project's deployments bookmarkable.
  * - `withFetch` is not a preference. The default XHR backend is invisible to OTLP fetch
  *   instrumentation, so choosing it would quietly forfeit client spans the moment this deployment
- *   grows a telemetry relay. This app's own reads (`/deployments/api/…`) are same-origin paths and
- *   carry no credential; a read of another application's API goes to that application's own origin
- *   from the navigation below, with the session.
+ *   grows a telemetry relay. `withInterceptors([qitsBearerInterceptor])` is what actually attaches
+ *   the bearer: this app's own reads (`/deployments/api/…`) are same-origin paths the interceptor
+ *   signs like any other, and a read of another application's API, which goes to that application's
+ *   own origin from the navigation below, is a platform host the interceptor also signs — carrying
+ *   the bearer rather than the session cookie (epic qits-543).
+ * - `provideQitsBearerSignIn({ clientId: 'qits-spa' })` wires the OIDC authorization-code-with-PKCE
+ *   sign-in, the token store, and `/auth/callback` — prepended to the routes below, ahead of every
+ *   guard this app might add.
  * - `provideQitsNavigation` gives `QitsMainLayout` its left navigation, by asking the edge for
  *   `/main-navigation` once at startup. The list is the edge's answer now — derived from the
  *   deployments it actually serves — not a list compiled into @qits/ui-components; without this
@@ -44,7 +50,8 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
-    provideHttpClient(withFetch()),
+    provideHttpClient(withFetch(), withInterceptors([qitsBearerInterceptor])),
+    provideQitsBearerSignIn({ clientId: 'qits-spa' }),
     provideQitsNavigation(),
     provideQitsProjects(),
     provideQitsScope('project'),

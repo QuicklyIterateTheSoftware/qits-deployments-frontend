@@ -11,7 +11,8 @@ const REPO_ID = 'repo-ci';
 /**
  * Where these reads go. qits-projects answers on its own host — the edge no longer routes its paths
  * on this one — so every read is an absolute URL on the origin the navigation names, carries the
- * session, and is not made at all until the navigation has said where that origin is.
+ * bearer (`qitsBearerInterceptor`'s job, not asserted here), and is not made at all until the
+ * navigation has said where that origin is.
  *
  * qits-projects wraps every list in `entries`, and every entry in the name of the thing it holds.
  * That is genuinely different from cd's `{environments: […]}`, so the client unwraps rather than
@@ -57,12 +58,12 @@ describe('ProjectsApi', () => {
     http.expectOne(`${PROJECTS_ORIGIN}/projects/api/projects`).flush({ entries: [] });
   });
 
-  it('unwraps the project entries, slug and all, with the session', async () => {
+  it('unwraps the project entries, slug and all, for the interceptor to sign', async () => {
     answer({ 'qits-projects': { origin: PROJECTS_ORIGIN } });
     const projects = api.projects();
     await settle();
     const request = http.expectOne(`${PROJECTS_ORIGIN}/projects/api/projects`);
-    expect(request.request.withCredentials).toBe(true);
+    expect(request.request.withCredentials).toBe(false);
     request.flush({
       entries: [
         {
@@ -74,14 +75,14 @@ describe('ProjectsApi', () => {
     await expect(projects).resolves.toMatchObject([{ id: 'p1', slug: 'qits' }]);
   });
 
-  it('reads one repository’s released requests there too, with the session', async () => {
+  it('reads one repository’s released requests there too, for the interceptor to sign', async () => {
     answer({ 'qits-projects': { origin: PROJECTS_ORIGIN } });
     void api.releaseRequests(REPO_ID);
     await settle();
     const request = http.expectOne(
       `${PROJECTS_ORIGIN}/projects/api/repositories/${REPO_ID}/release-requests?state=RELEASED`,
     );
-    expect(request.request.withCredentials).toBe(true);
+    expect(request.request.withCredentials).toBe(false);
     request.flush({ requests: [] });
   });
 
