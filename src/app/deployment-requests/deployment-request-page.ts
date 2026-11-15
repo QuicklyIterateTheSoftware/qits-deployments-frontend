@@ -14,6 +14,7 @@ import { QitsBadge, QitsButton, type QitsBadgeTone } from '@qits/ui-components';
 import { CdApi } from '../api/cd-api';
 import {
   isCompletedRequest,
+  isHeldForApproval,
   isPendingGate,
   isRefused,
   type CdDeploymentDto,
@@ -106,6 +107,12 @@ export class DeploymentRequestPage {
   /** A poll that failed, said beside the page rather than instead of it. */
   protected readonly pollProblem = signal('');
 
+  /** Whether an approve call is in flight — the one write this page makes. */
+  protected readonly approving = signal(false);
+
+  /** Why an approve call was refused, said beside the button rather than instead of the page. */
+  protected readonly approveProblem = signal('');
+
   protected readonly formatInstant = formatInstant;
   protected readonly shortSha = shortSha;
   protected readonly none = NONE;
@@ -184,6 +191,37 @@ export class DeploymentRequestPage {
 
   protected async reload(): Promise<void> {
     await this.load(this.requestId());
+  }
+
+  /**
+   * Settle the hold by hand: the one write this page makes.
+   *
+   * The answer is the same `{deploymentRequest, deployment}` envelope the single read gives, so the
+   * page's state is set straight from it rather than issuing a second read to see what the approve
+   * just did — and the context reads (the tier's deployments, the merge) follow it exactly as they
+   * follow a poll's answer, because the deployment this unblocks is new information for both.
+   *
+   * A refusal here is not this page's error: 409 is a request no longer held (not held at all,
+   * already settled, or no longer the newest release for its application), 404 an id nothing
+   * matches, 502 a declaration qits-configuration could not read. Each is named beside the button
+   * rather than replacing the page.
+   */
+  protected async approve(): Promise<void> {
+    const id = this.requestId();
+    if (!id || this.approving()) {
+      return;
+    }
+    this.approving.set(true);
+    this.approveProblem.set('');
+    try {
+      const answer = await this.cdApi.approve(id);
+      this.detail.set(ready(answer));
+      await this.loadContext(answer.deploymentRequest);
+    } catch (error) {
+      this.approveProblem.set(describeError(error));
+    } finally {
+      this.approving.set(false);
+    }
   }
 
   /**
@@ -426,12 +464,20 @@ export class DeploymentRequestPage {
 
   /** What a still-moving request is waiting on. */
   private movingWord(request: CdDeploymentRequestDto): string {
+    if (isHeldForApproval(request)) {
+      return 'held for manual approval';
+    }
     return isPendingGate(request) ? 'waiting on the quality gate' : 'deploying';
   }
 
   // --- the facts under the flow -----------------------------------------------------------------
 
+  protected readonly isHeldForApproval = isHeldForApproval;
+
   protected gateLabel(request: CdDeploymentRequestDto): string {
+    if (isHeldForApproval(request)) {
+      return 'Held for approval';
+    }
     if (isPendingGate(request)) {
       return 'In the gate';
     }
@@ -439,6 +485,9 @@ export class DeploymentRequestPage {
   }
 
   protected gateTone(request: CdDeploymentRequestDto): QitsBadgeTone {
+    if (isHeldForApproval(request)) {
+      return 'warning';
+    }
     if (isPendingGate(request)) {
       return 'info';
     }

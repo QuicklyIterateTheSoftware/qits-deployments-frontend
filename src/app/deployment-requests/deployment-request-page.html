@@ -39,6 +39,23 @@
         @if (request.gateDetail) {
           <span class="gate-detail">{{ request.gateDetail }}</span>
         }
+        @if (isHeldForApproval(request)) {
+          @if (request.releaseRequestQualifiedId) {
+            <span class="gate-detail">release request {{ request.releaseRequestQualifiedId }}</span>
+          }
+          <qits-button variant="primary" size="sm" [busy]="approving()" (pressed)="approve()">
+            Approve
+          </qits-button>
+        } @else if (request.approvedBy) {
+          <span class="gate-detail">
+            Approved by {{ request.approvedBy }} · {{ formatInstant(request.approvedAt ?? null) }}
+          </span>
+        }
+        @if (approveProblem()) {
+          <span class="approve-problem" role="alert">
+            ⚠ Could not approve — {{ approveProblem() }}
+          </span>
+        }
       </dd>
 
       <dt>Package</dt>

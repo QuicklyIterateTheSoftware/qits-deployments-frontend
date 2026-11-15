@@ -219,6 +219,21 @@ export type CdQualityGate = 'UNMET' | 'MET';
  * priority at all, and "the release stated none" is a real answer rather than a gap. Typed as a
  * string and not a union because this client never decides anything with it: a word a build has not
  * been taught renders as itself instead of being dropped.
+ *
+ * `deployHold`, `releaseRequestQualifiedId`, `approvedBy` and `approvedAt` are qits-2268's four: a
+ * request can now be held for a person or an agent to approve rather than deploying the instant the
+ * gate would otherwise have let it through. Held, it reads `qualityGate: 'UNMET'`,
+ * `gateSettledAt: null`, `deployHold: true` and a `gateDetail` of
+ * `held for manual approval on <release request qualified id>` — the same two gate fields a refusal
+ * writes, which is exactly why `deployHold` exists: without it, a held request and a request still
+ * waiting on a real gate are the same two fields and cannot be told apart. `releaseRequestQualifiedId`
+ * is the request that held it, for the link this screen draws; it is null off that request, and on
+ * every row that was never held. Once approved, `qualityGate` becomes `MET`, `gateSettledAt` is set,
+ * `gateDetail` reads `approved by <actor>`, and `approvedBy`/`approvedAt` carry who and when — a
+ * person or an agent, either may approve. All four are optional here even though the server writes
+ * them on every row from this release on, because `isHeldForApproval` below is written to answer
+ * correctly from `gateDetail` alone when a row — a fixture, a cached response, a build that has not
+ * picked up the new field yet — carries none of them.
  */
 export interface CdDeploymentRequestDto {
   readonly id: string;
@@ -235,6 +250,10 @@ export interface CdDeploymentRequestDto {
   readonly gateSettledAt: string | null;
   readonly deploymentStatus: CdDeploymentStatus | null;
   readonly priority?: string | null;
+  readonly deployHold?: boolean;
+  readonly releaseRequestQualifiedId?: string | null;
+  readonly approvedBy?: string | null;
+  readonly approvedAt?: string | null;
 }
 
 /**
@@ -252,6 +271,33 @@ export function isPendingGate(request: CdDeploymentRequestDto): boolean {
 /** Whether the gate refused this request outright: it answered, and it queued nothing. */
 export function isRefused(request: CdDeploymentRequestDto): boolean {
   return request.qualityGate === 'UNMET' && request.gateSettledAt !== null;
+}
+
+/**
+ * Whether this request is sitting in `deployHold`, waiting for a person or an agent to approve it
+ * rather than for a gate to answer.
+ *
+ * It is a **subset of `isPendingGate`**, not a separate state: a held request writes the identical
+ * `qualityGate: 'UNMET'` / `gateSettledAt: null` pair a request still waiting on a real gate would,
+ * because that is what lets `POST …/approve` reuse the same settlement the gate itself performs.
+ * `deployHold` is the one field that tells the two apart, which is the whole reason the server
+ * started writing it.
+ *
+ * **`deployHold` missing is tolerated, deliberately**, by falling back to `gateDetail`: a row this
+ * client read before it was taught the field, a fixture in a spec, or a build of this app one
+ * release behind the server's would otherwise show "In the gate" for a request a person is waiting
+ * on `qits` to surface — silence rather than a wrong badge, but still the wrong badge. The fallback
+ * reads the sentence qits-deployments writes beside the hold rather than reparsing anything from
+ * it, so it breaks the moment that sentence's wording changes rather than hiding a drift quietly.
+ */
+export function isHeldForApproval(request: CdDeploymentRequestDto): boolean {
+  if (request.qualityGate !== 'UNMET' || request.gateSettledAt !== null) {
+    return false;
+  }
+  if (request.deployHold !== undefined) {
+    return request.deployHold === true;
+  }
+  return (request.gateDetail ?? '').startsWith('held for manual approval');
 }
 
 /**

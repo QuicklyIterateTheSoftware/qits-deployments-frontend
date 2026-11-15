@@ -13,6 +13,7 @@ import { QITS_SCOPE, QitsBadge, QitsButton, type QitsBadgeTone } from '@qits/ui-
 import { CdApi } from '../api/cd-api';
 import {
   isCompletedRequest,
+  isHeldForApproval,
   isPendingGate,
   isRefused,
   type CdDeploymentRequestDto,
@@ -286,6 +287,9 @@ export class DeploymentRequestsPage {
    * `deployment-table.ts`.
    */
   protected gateLabel(request: CdDeploymentRequestDto): string {
+    if (isHeldForApproval(request)) {
+      return 'Held for approval';
+    }
     if (isPendingGate(request)) {
       return 'In the gate';
     }
@@ -295,9 +299,13 @@ export class DeploymentRequestsPage {
   /**
    * `success` for a version that was allowed through, `warning` for one that was not, `info` while
    * nothing has answered. A refusal is not a `danger`: nothing failed — the platform declined, on
-   * purpose, and said why.
+   * purpose, and said why. A hold is `warning` too, for the same reason a refusal is: it is not
+   * failing, it is waiting on a person.
    */
   protected gateTone(request: CdDeploymentRequestDto): QitsBadgeTone {
+    if (isHeldForApproval(request)) {
+      return 'warning';
+    }
     if (isPendingGate(request)) {
       return 'info';
     }

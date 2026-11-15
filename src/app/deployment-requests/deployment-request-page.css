@@ -86,6 +86,11 @@ h2 {
   font-size: 0.85rem;
 }
 
+.approve-problem {
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
 .none {
   margin: 0;
   color: #6b7280;

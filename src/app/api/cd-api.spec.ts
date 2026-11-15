@@ -86,9 +86,7 @@ describe('CdApi', () => {
 
   it('posts a restart to the application, with no body to get wrong', async () => {
     const restarted = api.restart('e1:qits-ci');
-    const request = http.expectOne(
-      '/deployments/api/applications/e1%3Aqits-ci/restart',
-    );
+    const request = http.expectOne('/deployments/api/applications/e1%3Aqits-ci/restart');
     expect(request.request.method).toBe('POST');
     request.flush({});
     await expect(restarted).resolves.toBeUndefined();
@@ -148,5 +146,54 @@ describe('CdApi', () => {
       .expectOne((candidate) => candidate.url === '/deployments/api/deployments')
       .flush({ message: 'No such environment' }, { status: 404, statusText: 'Not Found' });
     await expect(deployments).rejects.toBeInstanceOf(HttpErrorResponse);
+  });
+
+  it('posts an empty body to approve, and unwraps the same envelope the single read gives', async () => {
+    const approved = api.approve('r1');
+    const request = http.expectOne('/deployments/api/deployment-requests/r1/approve');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({});
+    request.flush({
+      deploymentRequest: {
+        id: 'r1',
+        applicationName: 'qits-ci',
+        version: '2026.903.113443',
+        environmentId: 'e1',
+        packageName: null,
+        repoId: 'qits-ci',
+        projectId: 'p1',
+        qualityGate: 'MET',
+        gateDetail: 'approved by xion03@gmail.com',
+        deploymentId: 'd1',
+        createdAt: '2026-09-03T11:34:43Z',
+        gateSettledAt: '2026-09-03T11:40:00Z',
+        deploymentStatus: 'QUEUED',
+        approvedBy: 'xion03@gmail.com',
+        approvedAt: '2026-09-03T11:40:00Z',
+      },
+      deployment: null,
+    });
+    await expect(approved).resolves.toMatchObject({
+      deploymentRequest: { id: 'r1', approvedBy: 'xion03@gmail.com' },
+    });
+  });
+
+  it('escapes the id in the approve path, the same as every other path segment here', async () => {
+    const approved = api.approve('e1:r1');
+    http
+      .expectOne('/deployments/api/deployment-requests/e1%3Ar1/approve')
+      .flush({ deploymentRequest: null, deployment: null });
+    await expect(approved).resolves.toBeDefined();
+  });
+
+  it('rejects an approve the server refused, with the status callers key their message on', async () => {
+    const approved = api.approve('r1');
+    http
+      .expectOne('/deployments/api/deployment-requests/r1/approve')
+      .flush(
+        { message: 'this request is no longer held for approval' },
+        { status: 409, statusText: 'Conflict' },
+      );
+    await expect(approved).rejects.toBeInstanceOf(HttpErrorResponse);
   });
 });

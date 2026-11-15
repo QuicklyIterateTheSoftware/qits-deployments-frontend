@@ -154,6 +154,32 @@ describe('DeploymentRequestsPage', () => {
     expect(sections[1].textContent).toContain('nothing was deployed');
   });
 
+  it('reads a deployHold row as "Held for approval" and keeps it pending', async () => {
+    // qits-2268: deployHold writes the same UNMET/null pair a request still waiting on the gate
+    // would, so it stays in Pending — it is `isPendingGate` too, just for a different reason.
+    await open('/qits/deployment-requests');
+    await flushRequests([
+      request('r1', {
+        version: '2026.903.4',
+        qualityGate: 'UNMET',
+        gateSettledAt: null,
+        gateDetail: 'held for manual approval on qits/ticket/qits-2268',
+        deployHold: true,
+        releaseRequestQualifiedId: 'qits/ticket/qits-2268',
+        deploymentId: null,
+        deploymentStatus: null,
+      }),
+    ]);
+
+    const sections = Array.from(
+      (harness.fixture.nativeElement as HTMLElement).querySelectorAll('section'),
+    );
+    expect(sections[0].textContent).toContain('2026.903.4');
+    expect(sections[0].textContent).toContain('Held for approval');
+    expect(sections[0].textContent).not.toContain('Gate unmet');
+    expect(text()).toContain('following 1 release');
+  });
+
   it('shows the priority the release asked for, and leaves the cell blank where it asked for none', async () => {
     // Absent is the answer for every release cut before the feature — the server writes no backfill
     // — and it is the assertion that matters here: a cell that said `Medium` on a row's behalf would

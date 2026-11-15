@@ -638,6 +638,39 @@ describe('DeploymentsPage', () => {
     expect(text()).toContain('the userflow suite failed against dev');
   });
 
+  it('shows a held request as waiting on a person rather than on the gate', async () => {
+    // qits-2268: deployHold writes the identical UNMET/null pair a refusal would, so this is the
+    // one case `isHeldForApproval` exists to tell apart from the two above.
+    await open();
+    await flushRoots([project('p1', 'qits', 'qits')], [environment('e1', 'qits')]);
+
+    await click('qits');
+    await flushEnvironment(
+      'e1',
+      [application('a1', 'qits-ci')],
+      [deployment('d1', 'a1', { version: '2026.903.113443' })],
+      [
+        request('r2', 'qits-ci', {
+          version: '2026.903.120000',
+          qualityGate: 'UNMET',
+          gateSettledAt: null,
+          deployHold: true,
+          releaseRequestQualifiedId: 'qits/ticket/qits-2268',
+          gateDetail: 'held for manual approval on qits/ticket/qits-2268',
+          createdAt: '2026-07-31T15:00:00Z',
+        }),
+        request('r1', 'qits-ci', { version: '2026.903.113443', deploymentId: 'd1' }),
+      ],
+    );
+
+    expect(page().querySelector('.outstanding')?.textContent).toContain('2026.903.120000');
+    expect(page().querySelector('.outstanding')?.textContent).toContain('held for approval');
+
+    await click('qits-ci');
+    expect(text()).toContain('Held for approval');
+    expect(text()).toContain('held for manual approval on qits/ticket/qits-2268');
+  });
+
   it('reads the newest request as the outstanding one whatever order the list arrives in', async () => {
     // The request bucket had the same inherited-order assumption the deployment bucket did, one
     // field over: `outstanding` is the head of it. The listing below arrives OLDER FIRST, so a
@@ -1017,11 +1050,7 @@ describe('DeploymentsPage', () => {
     await open();
     await flushRoots([project('p1', 'qits', 'qits')], [environment('e1', 'qits')]);
     await click('qits');
-    await flushEnvironment(
-      'e1',
-      [application('a1', 'qits-ci')],
-      [deployment('d1', 'a1', over)],
-    );
+    await flushEnvironment('e1', [application('a1', 'qits-ci')], [deployment('d1', 'a1', over)]);
   }
 
   function expectOperation(path: string) {
@@ -1131,8 +1160,11 @@ describe('DeploymentsPage', () => {
     await settle();
 
     expect(text()).toContain('queued…');
-    expect(buttons().map((button) => button.textContent ?? '').some((l) => l.includes('Restart')))
-      .toBe(false);
+    expect(
+      buttons()
+        .map((button) => button.textContent ?? '')
+        .some((l) => l.includes('Restart')),
+    ).toBe(false);
 
     expectOperation('a1/restart').flush({});
     await settle();

@@ -113,6 +113,14 @@ describe('DeploymentRequestPage', () => {
     ]);
   }
 
+  function buttons(): HTMLButtonElement[] {
+    return Array.from(page().querySelectorAll('button'));
+  }
+
+  function approveButton(): HTMLButtonElement | undefined {
+    return buttons().find((button) => (button.textContent ?? '').includes('Approve'));
+  }
+
   async function settle(): Promise<void> {
     for (let round = 0; round < 3; round += 1) {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -326,5 +334,95 @@ describe('DeploymentRequestPage', () => {
     await pastOnePoll();
     await pastOnePoll();
     http.verify();
+  });
+
+  // qits-2268: a request held for manual approval, and the write that settles it.
+  describe('a request held for manual approval', () => {
+    const held = (over: Partial<CdDeploymentRequestDto> = {}): CdDeploymentRequestDto =>
+      request({
+        qualityGate: 'UNMET',
+        gateSettledAt: null,
+        deployHold: true,
+        releaseRequestQualifiedId: 'qits/ticket/qits-2268',
+        gateDetail: 'held for manual approval on qits/ticket/qits-2268',
+        deploymentId: null,
+        deploymentStatus: null,
+        ...over,
+      });
+
+    it('reads "Held for approval", the hold detail and the release request, with an Approve button', async () => {
+      await open();
+      await flushLoad({ request: held(), deployment: null, deployments: [] });
+
+      expect(text()).toContain('Held for approval');
+      expect(text()).toContain('held for manual approval on qits/ticket/qits-2268');
+      expect(text()).toContain('qits/ticket/qits-2268');
+      expect(approveButton()).toBeTruthy();
+    });
+
+    it('sends the approve call, marks the button busy, and redraws from its answer', async () => {
+      await open();
+      await flushLoad({ request: held(), deployment: null, deployments: [] });
+
+      const button = approveButton();
+      button?.click();
+      await settle();
+      // The write is in flight: the button says so and a second click must not queue a second call.
+      expect(button?.getAttribute('aria-busy')).toBe('true');
+
+      http.expectOne('/deployments/api/deployment-requests/r1/approve').flush({
+        deploymentRequest: held({
+          qualityGate: 'MET',
+          gateSettledAt: '2026-07-31T14:10:00Z',
+          gateDetail: 'approved by xion03@gmail.com',
+          approvedBy: 'xion03@gmail.com',
+          approvedAt: '2026-07-31T14:10:00Z',
+          deploymentId: 'd1',
+          deploymentStatus: 'QUEUED',
+        }),
+        deployment: deployment({ status: 'QUEUED', finishedAt: null }),
+      });
+      await settle();
+      // The same two context reads a poll makes — never the environment list.
+      http
+        .expectOne(
+          (candidate) =>
+            candidate.url === '/deployments/api/deployments' &&
+            candidate.params.get('environmentId') === 'e1',
+        )
+        .flush({ deployments: [deployment({ status: 'QUEUED', finishedAt: null })] });
+      http
+        .expectOne('/projects/api/repositories/repo-ci/release-requests?state=RELEASED')
+        .flush({ requests: [] });
+      await settle();
+
+      expect(text()).toContain('Gate met');
+      expect(text()).toContain('Approved by xion03@gmail.com');
+      expect(text()).toContain('31 Jul 2026 14:10:00Z');
+      expect(approveButton()).toBeFalsy();
+    });
+
+    it('names a refused approve beside the button, and leaves the hold on screen', async () => {
+      await open();
+      await flushLoad({ request: held(), deployment: null, deployments: [] });
+
+      approveButton()?.click();
+      await settle();
+      http
+        .expectOne('/deployments/api/deployment-requests/r1/approve')
+        .flush(
+          { message: 'this request is no longer the newest release for qits-ci' },
+          { status: 409, statusText: 'Conflict' },
+        );
+      await settle();
+
+      expect(text()).toContain(
+        'Could not approve — 409 this request is no longer the newest release for qits-ci',
+      );
+      // The refusal is not this page's error: the hold is exactly as it was, and can be retried.
+      expect(text()).toContain('Held for approval');
+      expect(approveButton()).toBeTruthy();
+      expect(approveButton()?.getAttribute('aria-busy')).not.toBe('true');
+    });
   });
 });

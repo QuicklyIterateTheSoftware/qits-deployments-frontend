@@ -226,4 +226,25 @@ export class CdApi {
     );
     return response.deploymentRequests;
   }
+
+  /**
+   * Settle a `deployHold` request by hand: the gate it was held in front of answers `MET` and the
+   * deployment it was waiting to queue is queued. Any signed-in person or agent may call it — there
+   * is no role check beyond being signed in at all.
+   *
+   * The envelope is the same `{deploymentRequest, deployment}` shape the single read answers, so a
+   * caller can set its state straight from this response rather than re-reading the request to see
+   * what it did. A refusal is not a network failure: 409 is a request that is no longer held (not
+   * held at all, already settled, or no longer the newest release for its application), 404 is an
+   * id nothing matches, and 502 is a request whose declaration qits-configuration could not read —
+   * `describeError` turns any of them into the sentence the caller shows.
+   */
+  async approve(id: string): Promise<CdDeploymentRequestDetailResponse> {
+    return await firstValueFrom(
+      this.http.post<CdDeploymentRequestDetailResponse>(
+        `${this.base}/deployments/api/deployment-requests/${encodeURIComponent(id)}/approve`,
+        {},
+      ),
+    );
+  }
 }
