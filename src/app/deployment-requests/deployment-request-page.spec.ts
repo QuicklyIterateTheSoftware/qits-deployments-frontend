@@ -121,6 +121,14 @@ describe('DeploymentRequestPage', () => {
     return buttons().find((button) => (button.textContent ?? '').includes('Approve'));
   }
 
+  function declineButton(): HTMLButtonElement | undefined {
+    return buttons().find((button) => (button.textContent ?? '').includes('Decline'));
+  }
+
+  function declineNoteInput(): HTMLInputElement | null {
+    return page().querySelector<HTMLInputElement>('.decline-note');
+  }
+
   async function settle(): Promise<void> {
     for (let round = 0; round < 3; round += 1) {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -423,6 +431,118 @@ describe('DeploymentRequestPage', () => {
       expect(text()).toContain('Held for approval');
       expect(approveButton()).toBeTruthy();
       expect(approveButton()?.getAttribute('aria-busy')).not.toBe('true');
+    });
+
+    // qits-2271: decline, the other answer to a hold, and the one that is final.
+    it('offers a Decline button and a note input beside Approve, with the final-and-WITHDRAWN hint', async () => {
+      await open();
+      await flushLoad({ request: held(), deployment: null, deployments: [] });
+
+      expect(declineButton()).toBeTruthy();
+      expect(declineNoteInput()).toBeTruthy();
+      expect(text()).toContain('A decline is final');
+      expect(text()).toContain('WITHDRAWN');
+    });
+
+    it('sends the typed note on decline, marks the button busy, and redraws from its answer', async () => {
+      await open();
+      await flushLoad({ request: held(), deployment: null, deployments: [] });
+
+      const note = declineNoteInput();
+      note!.value = 'the change is wrong';
+      note!.dispatchEvent(new Event('input'));
+      await settle();
+
+      const button = declineButton();
+      button?.click();
+      await settle();
+      expect(button?.getAttribute('aria-busy')).toBe('true');
+
+      const request = http.expectOne('/deployments/api/deployment-requests/r1/decline');
+      expect(request.request.body).toEqual({ note: 'the change is wrong' });
+      request.flush({
+        deploymentRequest: held({
+          gateSettledAt: '2026-07-31T14:10:00Z',
+          gateDetail: 'declined by xion03@gmail.com: the change is wrong',
+          declinedBy: 'xion03@gmail.com',
+          declinedAt: '2026-07-31T14:10:00Z',
+        }),
+        deployment: null,
+      });
+      await settle();
+      // The same two context reads a poll makes — never the environment list.
+      http
+        .expectOne(
+          (candidate) =>
+            candidate.url === '/deployments/api/deployments' &&
+            candidate.params.get('environmentId') === 'e1',
+        )
+        .flush({ deployments: [] });
+      http
+        .expectOne('/projects/api/repositories/repo-ci/release-requests?state=RELEASED')
+        .flush({ requests: [] });
+      await settle();
+
+      expect(text()).toContain('Declined by xion03@gmail.com');
+      expect(text()).toContain('31 Jul 2026 14:10:00Z');
+      expect(declineButton()).toBeFalsy();
+      expect(approveButton()).toBeFalsy();
+    });
+
+    it('sends an empty decline when no note was typed', async () => {
+      await open();
+      await flushLoad({ request: held(), deployment: null, deployments: [] });
+
+      declineButton()?.click();
+      await settle();
+      const request = http.expectOne('/deployments/api/deployment-requests/r1/decline');
+      expect(request.request.body).toEqual({});
+      request.flush({
+        deploymentRequest: held({
+          gateSettledAt: '2026-07-31T14:10:00Z',
+          gateDetail: 'declined by xion03@gmail.com',
+          declinedBy: 'xion03@gmail.com',
+          declinedAt: '2026-07-31T14:10:00Z',
+        }),
+        deployment: null,
+      });
+      await settle();
+      http
+        .expectOne(
+          (candidate) =>
+            candidate.url === '/deployments/api/deployments' &&
+            candidate.params.get('environmentId') === 'e1',
+        )
+        .flush({ deployments: [] });
+      http
+        .expectOne('/projects/api/repositories/repo-ci/release-requests?state=RELEASED')
+        .flush({ requests: [] });
+      await settle();
+
+      expect(text()).toContain('Declined by xion03@gmail.com');
+    });
+
+    it('names a refused decline beside the button, and leaves the hold on screen', async () => {
+      await open();
+      await flushLoad({ request: held(), deployment: null, deployments: [] });
+
+      declineButton()?.click();
+      await settle();
+      http
+        .expectOne('/deployments/api/deployment-requests/r1/decline')
+        .flush(
+          { message: 'a sibling of this release request was already approved' },
+          { status: 409, statusText: 'Conflict' },
+        );
+      await settle();
+
+      expect(text()).toContain(
+        'Could not decline — 409 a sibling of this release request was already approved',
+      );
+      // The refusal is not this page's error: the hold is exactly as it was, and can be retried.
+      expect(text()).toContain('Held for approval');
+      expect(declineButton()).toBeTruthy();
+      expect(declineButton()?.getAttribute('aria-busy')).not.toBe('true');
     });
   });
 });

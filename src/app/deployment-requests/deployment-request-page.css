@@ -91,6 +91,32 @@ h2 {
   font-size: 0.85rem;
 }
 
+.decline-problem {
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.decline-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.decline-note {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  width: 12rem;
+}
+
+.decline-hint {
+  color: #6b7280;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
 .none {
   margin: 0;
   color: #6b7280;

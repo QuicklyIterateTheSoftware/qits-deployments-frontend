@@ -14,6 +14,7 @@ import { QitsBadge, QitsButton, type QitsBadgeTone } from '@qits/ui-components';
 import { CdApi } from '../api/cd-api';
 import {
   isCompletedRequest,
+  isDeclined,
   isHeldForApproval,
   isPendingGate,
   isRefused,
@@ -107,11 +108,20 @@ export class DeploymentRequestPage {
   /** A poll that failed, said beside the page rather than instead of it. */
   protected readonly pollProblem = signal('');
 
-  /** Whether an approve call is in flight — the one write this page makes. */
+  /** Whether an approve call is in flight — one of the two writes this page makes. */
   protected readonly approving = signal(false);
 
   /** Why an approve call was refused, said beside the button rather than instead of the page. */
   protected readonly approveProblem = signal('');
+
+  /** Whether a decline call is in flight — the other write this page makes. */
+  protected readonly declining = signal(false);
+
+  /** Why a decline call was refused, said beside the button rather than instead of the page. */
+  protected readonly declineProblem = signal('');
+
+  /** The optional note typed beside the Decline button, read by {@link decline} and nothing else. */
+  protected readonly declineNote = signal('');
 
   protected readonly formatInstant = formatInstant;
   protected readonly shortSha = shortSha;
@@ -222,6 +232,40 @@ export class DeploymentRequestPage {
     } finally {
       this.approving.set(false);
     }
+  }
+
+  /**
+   * The other answer to a hold (qits-2271), and the one that is final: nothing un-declines it, and
+   * the way to ship the work again is a new branch off the release's tag and a new release request.
+   *
+   * Otherwise the twin of {@link approve} in every way that matters here — the same envelope sets
+   * this page's state straight from the answer, the same context reads follow it, and a refusal is
+   * named beside the button rather than replacing the page. The one difference is the optional note,
+   * read off {@link declineNote} and cleared on success so a stale note cannot be re-sent against a
+   * different request.
+   */
+  protected async decline(): Promise<void> {
+    const id = this.requestId();
+    if (!id || this.declining()) {
+      return;
+    }
+    this.declining.set(true);
+    this.declineProblem.set('');
+    try {
+      const answer = await this.cdApi.decline(id, this.declineNote());
+      this.detail.set(ready(answer));
+      this.declineNote.set('');
+      await this.loadContext(answer.deploymentRequest);
+    } catch (error) {
+      this.declineProblem.set(describeError(error));
+    } finally {
+      this.declining.set(false);
+    }
+  }
+
+  /** The note input's `(input)` handler — plain DOM event, no reactive forms for one field. */
+  protected onDeclineNoteInput(event: Event): void {
+    this.declineNote.set((event.target as HTMLInputElement).value);
   }
 
   /**
@@ -473,6 +517,7 @@ export class DeploymentRequestPage {
   // --- the facts under the flow -----------------------------------------------------------------
 
   protected readonly isHeldForApproval = isHeldForApproval;
+  protected readonly isDeclined = isDeclined;
 
   protected gateLabel(request: CdDeploymentRequestDto): string {
     if (isHeldForApproval(request)) {

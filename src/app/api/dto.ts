@@ -234,6 +234,13 @@ export type CdQualityGate = 'UNMET' | 'MET';
  * them on every row from this release on, because `isHeldForApproval` below is written to answer
  * correctly from `gateDetail` alone when a row — a fixture, a cached response, a build that has not
  * picked up the new field yet — carries none of them.
+ *
+ * `declinedBy` and `declinedAt` are qits-2271's answer the other way: the other write `POST
+ * …/decline` performs on a held request. Declined, `qualityGate` stays `UNMET`, `gateSettledAt` is
+ * set, `gateDetail` reads `declined by <who>[: <note>]`, and these two carry who and when — never
+ * both this pair and `approvedBy`/`approvedAt` on the same row, since a request settles one way or
+ * the other and never both. Optional and nullable for the same reason as the approve pair: a row
+ * from before this release carries neither.
  */
 export interface CdDeploymentRequestDto {
   readonly id: string;
@@ -254,6 +261,8 @@ export interface CdDeploymentRequestDto {
   readonly releaseRequestQualifiedId?: string | null;
   readonly approvedBy?: string | null;
   readonly approvedAt?: string | null;
+  readonly declinedBy?: string | null;
+  readonly declinedAt?: string | null;
 }
 
 /**
@@ -271,6 +280,19 @@ export function isPendingGate(request: CdDeploymentRequestDto): boolean {
 /** Whether the gate refused this request outright: it answered, and it queued nothing. */
 export function isRefused(request: CdDeploymentRequestDto): boolean {
   return request.qualityGate === 'UNMET' && request.gateSettledAt !== null;
+}
+
+/**
+ * Whether a person or an agent declined this request held for approval (qits-2271) — the other
+ * answer to a hold, and the one that is final.
+ *
+ * Unlike {@link isHeldForApproval}'s `deployHold` fallback, there is nothing to fall back to here:
+ * `declinedAt` is the one field a decline writes that nothing else does, so a row this client read
+ * before it was taught the field simply answers `false`, which is the honest answer for a build one
+ * release behind the server's.
+ */
+export function isDeclined(request: CdDeploymentRequestDto): boolean {
+  return (request.declinedAt ?? null) !== null;
 }
 
 /**

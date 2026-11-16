@@ -46,14 +46,45 @@
           <qits-button variant="primary" size="sm" [busy]="approving()" (pressed)="approve()">
             Approve
           </qits-button>
+          <span class="decline-group">
+            <input
+              type="text"
+              class="decline-note"
+              placeholder="optional note"
+              [value]="declineNote()"
+              [disabled]="declining()"
+              (input)="onDeclineNoteInput($event)"
+            />
+            <qits-button
+              variant="secondary"
+              size="sm"
+              [busy]="declining()"
+              title="A decline is final — nothing un-declines it, and the release request ends WITHDRAWN. Ship the work again from a new branch off the release's tag and a new release request."
+              (pressed)="decline()"
+            >
+              Decline
+            </qits-button>
+          </span>
+          <span class="decline-hint">
+            A decline is final — the release request ends WITHDRAWN.
+          </span>
         } @else if (request.approvedBy) {
           <span class="gate-detail">
             Approved by {{ request.approvedBy }} · {{ formatInstant(request.approvedAt ?? null) }}
+          </span>
+        } @else if (isDeclined(request)) {
+          <span class="gate-detail">
+            Declined by {{ request.declinedBy }} at {{ formatInstant(request.declinedAt ?? null) }}
           </span>
         }
         @if (approveProblem()) {
           <span class="approve-problem" role="alert">
             ⚠ Could not approve — {{ approveProblem() }}
+          </span>
+        }
+        @if (declineProblem()) {
+          <span class="decline-problem" role="alert">
+            ⚠ Could not decline — {{ declineProblem() }}
           </span>
         }
       </dd>

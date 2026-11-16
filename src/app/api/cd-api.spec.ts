@@ -196,4 +196,69 @@ describe('CdApi', () => {
       );
     await expect(approved).rejects.toBeInstanceOf(HttpErrorResponse);
   });
+
+  // qits-2271: decline, the other answer to a hold.
+  it('posts an empty body to decline with no note, and unwraps the declined request', async () => {
+    const declined = api.decline('r1');
+    const request = http.expectOne('/deployments/api/deployment-requests/r1/decline');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({});
+    request.flush({
+      deploymentRequest: {
+        id: 'r1',
+        applicationName: 'qits-ci',
+        version: '2026.903.113443',
+        environmentId: 'e1',
+        packageName: null,
+        repoId: 'qits-ci',
+        projectId: 'p1',
+        qualityGate: 'UNMET',
+        gateDetail: 'declined by xion03@gmail.com',
+        deploymentId: null,
+        createdAt: '2026-09-03T11:34:43Z',
+        gateSettledAt: '2026-09-03T11:40:00Z',
+        deploymentStatus: null,
+        declinedBy: 'xion03@gmail.com',
+        declinedAt: '2026-09-03T11:40:00Z',
+      },
+      deployment: null,
+    });
+    await expect(declined).resolves.toMatchObject({
+      deploymentRequest: { id: 'r1', declinedBy: 'xion03@gmail.com' },
+      deployment: null,
+    });
+  });
+
+  it('posts the note when one is given, and omits it entirely when blank', async () => {
+    const withNote = api.decline('r1', 'the change is wrong');
+    const noted = http.expectOne('/deployments/api/deployment-requests/r1/decline');
+    expect(noted.request.body).toEqual({ note: 'the change is wrong' });
+    noted.flush({ deploymentRequest: null, deployment: null });
+    await expect(withNote).resolves.toBeDefined();
+
+    const blank = api.decline('r1', '   ');
+    const unnoted = http.expectOne('/deployments/api/deployment-requests/r1/decline');
+    expect(unnoted.request.body).toEqual({});
+    unnoted.flush({ deploymentRequest: null, deployment: null });
+    await expect(blank).resolves.toBeDefined();
+  });
+
+  it('escapes the id in the decline path, the same as every other path segment here', async () => {
+    const declined = api.decline('e1:r1');
+    http
+      .expectOne('/deployments/api/deployment-requests/e1%3Ar1/decline')
+      .flush({ deploymentRequest: null, deployment: null });
+    await expect(declined).resolves.toBeDefined();
+  });
+
+  it('rejects a decline the server refused, with the status callers key their message on', async () => {
+    const declined = api.decline('r1');
+    http
+      .expectOne('/deployments/api/deployment-requests/r1/decline')
+      .flush(
+        { message: 'a sibling of this release request was already approved' },
+        { status: 409, statusText: 'Conflict' },
+      );
+    await expect(declined).rejects.toBeInstanceOf(HttpErrorResponse);
+  });
 });

@@ -247,4 +247,29 @@ export class CdApi {
       ),
     );
   }
+
+  /**
+   * Decline a `deployHold` request by hand (qits-2271): the other answer to a hold. Nothing is
+   * queued, and nothing is final the way this is — to ship the work again means a new branch off
+   * the release's tag and a new release request.
+   *
+   * The envelope is the same `{deploymentRequest, deployment}` shape `approve` and the single read
+   * answer, with `deployment` always null here: a decline queues nothing. The body is posted only
+   * when there is a note to carry — an empty `{}` and no body at all are the same decline on the
+   * server, so this client sends the smaller one rather than asserting a note it does not have.
+   *
+   * A refusal is not a network failure: 409 is a request that is no longer held (not held at all,
+   * already settled, or a sibling of the same release request was already approved), and 404 is an
+   * id nothing matches — `describeError` turns either into the sentence the caller shows.
+   */
+  async decline(id: string, note?: string): Promise<CdDeploymentRequestDetailResponse> {
+    const trimmed = note?.trim();
+    const body = trimmed ? { note: trimmed } : {};
+    return await firstValueFrom(
+      this.http.post<CdDeploymentRequestDetailResponse>(
+        `${this.base}/deployments/api/deployment-requests/${encodeURIComponent(id)}/decline`,
+        body,
+      ),
+    );
+  }
 }
