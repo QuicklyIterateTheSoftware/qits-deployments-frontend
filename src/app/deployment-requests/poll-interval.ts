@@ -1,13 +1,16 @@
 import { InjectionToken } from '@angular/core';
 
 /**
- * How long these two screens wait between reads while something is still moving.
+ * How long the request detail page waits between reads while something is still moving.
  *
  * Six seconds rather than the front page's five, and the difference is the question being asked: the
  * table polls a whole tier's containers coming up, which is tens of seconds of real change, while
- * these pages watch one release cross a gate and a deployment — mostly a wait, occasionally a
+ * this page watches one release cross a gate and a deployment — mostly a wait, occasionally a
  * change. A second either way is not the point; a screen that keeps re-reading a settled release
  * forever is.
+ *
+ * The list this page is reached from used to poll on the same token — it moved to the landing app
+ * (qits-2315), which has a cadence of its own to decide; this token is now the detail page's alone.
  *
  * **The chain is a `setTimeout` armed after each answer, never a `setInterval`**, and that is the
  * one thing about the poll worth defending. An interval fires on a schedule the server has no say

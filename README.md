@@ -1,8 +1,8 @@
 # qits-deployments-platform-frontend
 
 The CD explorer: what is deployed where, served by qits-deployments itself at the root of
-`deployments.<env>.<domain>` through Quinoa. Three screens, no forms — and exactly two writes, which
-are operations on a running application rather than changes to the catalogue.
+`deployments.<env>.<domain>` through Quinoa. Two screens of its own, no forms — and exactly two
+writes, which are operations on a running application rather than changes to the catalogue.
 
 - **`/`** (and `/<projectSlug>/`) — deployments by project. Projects (from qits-projects) → the cd
   environment each project's slug names → a table of that environment's applications and what is
@@ -10,40 +10,33 @@ are operations on a running application rather than changes to the catalogue.
   project costs three more (the environment's applications, its deployments, its deployment
   requests) and caches. Expansion is carried in the query parameters (`?project=…`), so it is
   bookmarkable and the back button collapses.
-- **`/<projectSlug>/deployment-requests`** — every release the project asked the platform for.
-- **`/<projectSlug>/deployment-requests/<id>`** — one of them, end to end.
+- **`/<projectSlug>/deployment-requests`** — no longer a screen here. The list moved to the landing
+  app, at `/projects/<slug>/deployments/requests`, and this address now exists only to carry an old
+  bookmark there (qits-2315); see "The requests page moved" below.
+- **`/<projectSlug>/deployment-requests/<id>`** — one request, end to end. Still this application's
+  own screen; only the list above it moved.
 
-## The requests, and why they are a screen of their own
+## The requests page moved
 
-The table above answers *what ran*. A deployment request is what was **asked for**, and the two are
+Every release a project asked the platform for used to be a screen of this application's own, at
+`/<projectSlug>/deployment-requests`. It moved into the landing app, at
+`/projects/<slug>/deployments/requests` (qits-2315), and that address is now
+`DeploymentRequestsRedirect`: a full-page hop there, reading the `:project` segment straight off the
+route rather than through `@qits/ui-components`' scope parsing — it has no reason to wait on the
+project list that parsing needs, since it is leaving this application either way. The unscoped form,
+`/deployment-requests`, has no destination of its own over there — a deployment request is asked for
+by project and by nothing else — so it lands on the landing app's project picker, `/projects`,
+instead.
+
+Nothing about _why_ the requests needed a screen of their own changed, only where that screen lives.
+The table above answers _what ran_; a deployment request is what was **asked for**, and the two are
 not the same question: a request the quality gate refuses queues no deployment at all, so it has no
 row in the deployments listing and a reader of that listing alone would see the release as never
-having happened. The front page already folds requests into an application's row — that is the
-`→ 2026.903.12 · gate unmet` cell — but it does so *per tier*, which is right for "what is running
-in dev" and wrong for "what has my project been shipping". A project's releases enter at whichever
-environment the platform designates, and the designation moves.
-
-So the list reads `GET /deployments/api/deployment-requests?projectId=…`, one request, and
-draws two sections: **Pending**, which is everything the platform has not finished with, and
-**Completed**, which is the ten most recent that are. Both halves are decided by the server —
-`RequestLifecycle` there, `isCompletedRequest` here, and the two are written to agree — and the cap
-is the server's too, because a project releasing for a year holds thousands of settled rows and a
-client that asked for them in order to show ten would download the year and throw it away. What is
-never capped is the pending half: a release still moving must not be the row a limit dropped.
-
-Each row also carries the **priority** the release asked for — `LOWEST` through `BLOCKING`, declared
-on the participating branches of the release request that minted the version and carried down the
-chain to the row this page reads. It is drawn and it is **inert**: nothing in qits-deployments orders
-anything by it and the deploy queue is still first in, first out. It is shown because a value nobody
-can read is a value nobody can act on, and because the day the queue does order by it the screen that
-explains an overtake is this one. A release cut before the field existed carries none — there is no
-backfill — and its cell is left **blank** rather than made to claim the `MEDIUM` default on the
-release's behalf.
-
-Outside a project the page **makes no request at all** and says so in a sentence. An empty list and
-an unscoped one look identical on screen, and they are different answers. The scope is read from the
-address by `@qits/ui-components` exactly as the table reads it — never from the `:project` route
-parameter.
+having happened. The front page still folds requests into an application's row — that is the
+`→ 2026.903.12 · gate unmet` cell — but it does so _per tier_, which is right for "what is running
+in dev" and wrong for "what has my project been shipping": a project's releases enter at whichever
+environment the platform designates, and the designation moves. That is the argument the landing
+app's screen now carries forward, not this one.
 
 ## The lifecycle a request went through
 
@@ -60,7 +53,7 @@ Two of the verdicts are worth stating out loud:
 - **Merged to main** is the one step qits-deployments cannot see: the merge happens in the git host
   after the release and nothing announces it back. It comes from qits-projects' release requests,
   matched by version — and a read that failed, or a request that named no repository, leaves the
-  tile *pending* with a meta line saying why. Not knowing whether something merged is not knowing
+  tile _pending_ with a meta line saying why. Not knowing whether something merged is not knowing
   it did not, and a version that deployed an hour ago is still a true screen with qits-projects
   down.
 
@@ -74,10 +67,11 @@ which keeps the back button pointing at whatever linked here. A miss is a senten
 rather than a 404: releasing a version that deploys nothing is the ordinary shape of a library or an
 SPA, and it is also what a release looks like in the seconds before it reaches this service.
 
-Both pages poll every six seconds while something is still moving, as a `setTimeout` armed **after
-each answer** rather than a `setInterval` — an interval overlaps its own reads when a service is
-slow, which hands it more traffic exactly when it can least take it. A settled release generates no
-traffic and neither does a hidden tab.
+The detail page polls every six seconds while something is still moving, as a `setTimeout` armed
+**after each answer** rather than a `setInterval` — an interval overlaps its own reads when a
+service is slow, which hands it more traffic exactly when it can least take it. A settled release
+generates no traffic and neither does a hidden tab. (The list this page is reached from polled the
+same way; it moved to the landing app, which polls on its own terms — qits-2315.)
 
 ## The two levers
 
@@ -91,7 +85,7 @@ push to `environment/dev` and waiting a quarter of an hour for a rebuild.
   platform, so the confirmation is inline and names the row. The row then reads **Stopped**
   (`SCALED_TO_ZERO`), a warning rather than a danger tone — somebody did it on purpose — and offers
   **Start** in place of the other two.
-- **Start** scales it back to one. The row keeps saying *Stopped* until qits-deployments' own
+- **Start** scales it back to one. The row keeps saying _Stopped_ until qits-deployments' own
   observation finds the tasks healthy, which is up to one observation interval later. That wait is
   deliberate here: the service reaches a health verdict in exactly one place, and this page must not
   invent a completion it never promised.

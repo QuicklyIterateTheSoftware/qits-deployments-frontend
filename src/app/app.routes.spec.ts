@@ -92,32 +92,27 @@ describe('routes', () => {
     ).toBe('QITS');
   });
 
-  it('draws the requests page at the root, where it asks for nothing', async () => {
-    // Outside a project there is no project id to read by, so the page makes no request at all —
-    // which is why this route is reachable and still costs nothing.
+  it('redirects the unscoped requests address to the landing app, asking this app for nothing', async () => {
+    // The route carries no project, and the component makes no HTTP call of its own at all — it
+    // only waits on the navigation tree for the landing app's origin, which the harness above
+    // already seeded.
     const harness = await RouterTestingHarness.create('/deployment-requests');
     await harness.fixture.whenStable();
 
     expect(
-      (harness.routeNativeElement as HTMLElement).querySelector('app-deployment-requests-page'),
+      (harness.routeNativeElement as HTMLElement).querySelector('app-deployment-requests-redirect'),
     ).not.toBeNull();
     http.verify();
   });
 
-  it('draws the requests page under a project slug, and reads that project', async () => {
+  it('redirects the scoped requests address to the landing app, reading that project off the route', async () => {
     const harness = await RouterTestingHarness.create('/qits/deployment-requests');
     await harness.fixture.whenStable();
 
     expect(
-      (harness.routeNativeElement as HTMLElement).querySelector('app-deployment-requests-page'),
+      (harness.routeNativeElement as HTMLElement).querySelector('app-deployment-requests-redirect'),
     ).not.toBeNull();
-    http
-      .expectOne(
-        (request) =>
-          request.url === '/deployments/api/deployment-requests' &&
-          request.params.get('projectId') === 'p1',
-      )
-      .flush({ deploymentRequests: [] });
+    http.verify();
   });
 
   it('gives one request a page of its own, by its id', async () => {
