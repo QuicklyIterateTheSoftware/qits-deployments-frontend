@@ -115,14 +115,14 @@ describe('routes', () => {
     http.verify();
   });
 
-  it('gives one request a page of its own, by its id', async () => {
+  it('redirects one request’s address to the landing app, reading both the id and the project off the route', async () => {
     const harness = await RouterTestingHarness.create('/qits/deployment-requests/r1');
     await harness.fixture.whenStable();
 
     expect(
-      (harness.routeNativeElement as HTMLElement).querySelector('app-deployment-request-page'),
+      (harness.routeNativeElement as HTMLElement).querySelector('app-deployment-request-redirect'),
     ).not.toBeNull();
-    http.expectOne('/deployments/api/deployment-requests/r1');
+    http.verify();
   });
 
   it('lets the by-release literal win over the id parameter beside it', async () => {

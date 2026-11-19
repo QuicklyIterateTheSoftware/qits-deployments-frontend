@@ -6,7 +6,6 @@ import { QITS_NAVIGATION, toNavTree, type QitsNavTree } from '@qits/ui-component
 import { ProjectsApi } from './projects-api';
 
 const PROJECTS_ORIGIN = 'https://projects.qits.example';
-const REPO_ID = 'repo-ci';
 
 /**
  * Where these reads go. qits-projects answers on its own host — the edge no longer routes its paths
@@ -73,17 +72,6 @@ describe('ProjectsApi', () => {
     });
     // The slug is the field this app joins on; the name is only what the row is called.
     await expect(projects).resolves.toMatchObject([{ id: 'p1', slug: 'qits' }]);
-  });
-
-  it('reads one repository’s released requests there too, for the interceptor to sign', async () => {
-    answer({ 'qits-projects': { origin: PROJECTS_ORIGIN } });
-    void api.releaseRequests(REPO_ID);
-    await settle();
-    const request = http.expectOne(
-      `${PROJECTS_ORIGIN}/projects/api/repositories/${REPO_ID}/release-requests?state=RELEASED`,
-    );
-    expect(request.request.withCredentials).toBe(false);
-    request.flush({ requests: [] });
   });
 
   it('keeps the same-origin path where the navigation names no origin for qits-projects', async () => {

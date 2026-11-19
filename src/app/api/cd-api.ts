@@ -5,7 +5,6 @@ import { QITS_API_BASE } from './api-base';
 import type {
   CdApplicationDto,
   CdDeploymentDto,
-  CdDeploymentRequestDetailResponse,
   CdDeploymentRequestDto,
   CdDeploymentRequestsResponse,
   CdDeploymentsResponse,
@@ -187,22 +186,6 @@ export class CdApi {
   }
 
   /**
-   * One deployment request, with the deployment it produced.
-   *
-   * The deployment travels inside this answer instead of behind a second call, because there is no
-   * deployment-by-id endpoint to make one against — the deployments listing is tier-scoped, and
-   * qits-deployments declined to open a second door onto that table for one screen. `deployment` is
-   * null for a request that queued nothing.
-   */
-  async deploymentRequest(id: string): Promise<CdDeploymentRequestDetailResponse> {
-    return await firstValueFrom(
-      this.http.get<CdDeploymentRequestDetailResponse>(
-        `${this.base}/deployments/api/deployment-requests/${encodeURIComponent(id)}`,
-      ),
-    );
-  }
-
-  /**
    * Every deployment request written for one released version of one repository, newest first.
    *
    * The join followed the other way: a link from a release elsewhere on the platform knows a
@@ -225,51 +208,5 @@ export class CdApi {
       ),
     );
     return response.deploymentRequests;
-  }
-
-  /**
-   * Settle a `deployHold` request by hand: the gate it was held in front of answers `MET` and the
-   * deployment it was waiting to queue is queued. Any signed-in person or agent may call it — there
-   * is no role check beyond being signed in at all.
-   *
-   * The envelope is the same `{deploymentRequest, deployment}` shape the single read answers, so a
-   * caller can set its state straight from this response rather than re-reading the request to see
-   * what it did. A refusal is not a network failure: 409 is a request that is no longer held (not
-   * held at all, already settled, or no longer the newest release for its application), 404 is an
-   * id nothing matches, and 502 is a request whose declaration qits-configuration could not read —
-   * `describeError` turns any of them into the sentence the caller shows.
-   */
-  async approve(id: string): Promise<CdDeploymentRequestDetailResponse> {
-    return await firstValueFrom(
-      this.http.post<CdDeploymentRequestDetailResponse>(
-        `${this.base}/deployments/api/deployment-requests/${encodeURIComponent(id)}/approve`,
-        {},
-      ),
-    );
-  }
-
-  /**
-   * Decline a `deployHold` request by hand (qits-2271): the other answer to a hold. Nothing is
-   * queued, and nothing is final the way this is — to ship the work again means a new branch off
-   * the release's tag and a new release request.
-   *
-   * The envelope is the same `{deploymentRequest, deployment}` shape `approve` and the single read
-   * answer, with `deployment` always null here: a decline queues nothing. The body is posted only
-   * when there is a note to carry — an empty `{}` and no body at all are the same decline on the
-   * server, so this client sends the smaller one rather than asserting a note it does not have.
-   *
-   * A refusal is not a network failure: 409 is a request that is no longer held (not held at all,
-   * already settled, or a sibling of the same release request was already approved), and 404 is an
-   * id nothing matches — `describeError` turns either into the sentence the caller shows.
-   */
-  async decline(id: string, note?: string): Promise<CdDeploymentRequestDetailResponse> {
-    const trimmed = note?.trim();
-    const body = trimmed ? { note: trimmed } : {};
-    return await firstValueFrom(
-      this.http.post<CdDeploymentRequestDetailResponse>(
-        `${this.base}/deployments/api/deployment-requests/${encodeURIComponent(id)}/decline`,
-        body,
-      ),
-    );
   }
 }

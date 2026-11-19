@@ -91,8 +91,12 @@ describe('DeploymentRequestResolver', () => {
     await settle();
 
     expect(TestBed.inject(Router).url).toBe('/qits/deployment-requests/r2');
-    // The detail page is now loading; this spec is about the hop, not about what it lands on.
-    http.expectOne('/deployments/api/deployment-requests/r2');
+    // That address now hops on again, to the landing app (qits-2322); this spec is about the first
+    // hop, not about what it lands on, so it asserts only the in-app URL and makes no further HTTP
+    // call of its own — the redirect waits on the navigation tree, which was seeded above.
+    expect(
+      (harness.routeNativeElement as HTMLElement).querySelector('app-deployment-request-redirect'),
+    ).not.toBeNull();
   });
 
   it('says so when the release deployed nothing, and offers to look again', async () => {

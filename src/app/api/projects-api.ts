@@ -2,16 +2,10 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { QitsAppLinks } from '@qits/ui-components';
 import { firstValueFrom } from 'rxjs';
-import type {
-  ProjectDto,
-  ProjectEntriesResponse,
-  ProjectsReleaseRequestDto,
-  ProjectsReleaseRequestsResponse,
-} from './dto';
+import type { ProjectDto, ProjectEntriesResponse } from './dto';
 
 /**
- * What this app reads from qits-projects: the project spine of the front page, and one field of a
- * release request.
+ * What this app reads from qits-projects: the project spine of the front page.
  *
  * qits-projects answers on its own host, not this one: the edge routes an application's paths on
  * that application's host only. So every call here goes to `applications['qits-projects'].origin`
@@ -20,15 +14,15 @@ import type {
  * relative path at this host first. Where the navigation names no origin the path stays relative,
  * same-origin — what an older edge still routes.
  *
- * Two methods, and still not the whole surface. qits-spa-ci's copy of this service also fetches a
+ * One method, and still not the whole surface. qits-spa-ci's copy of this service also fetches a
  * project's repositories, because its tree walks down to them; this app never does — the front
  * page's second level is the cd environment a project's slug names, and repositories appear only as
  * a column copied off `CdApplicationDto.repoId`. Carrying a `repositories()` nobody calls would be a
  * shared-code instinct applied to a file that is deliberately not shared.
  *
- * The second method is the exception that proves that rule: `releaseRequests` is here because the
- * lifecycle a deployment request went through ends in a fact only qits-projects holds, and it reads
- * exactly that fact.
+ * This used to carry a second method, `releaseRequests`, read by the deployment-request detail page
+ * for the one fact only qits-projects holds — whether a version merged to main. That page moved to
+ * the landing app (qits-2322), and with it the only caller, so the method went too.
  *
  * Duplicated from qits-spa-ci rather than extracted (Decision 2): the alternative is putting a
  * transport dependency into `@qits/ui-components`, which six SPAs consume without making a request,
@@ -51,28 +45,5 @@ export class ProjectsApi {
     const url = await this.url('/projects/api/projects');
     const response = await firstValueFrom(this.http.get<ProjectEntriesResponse>(url));
     return response.entries.map((entry) => entry.project);
-  }
-
-  /**
-   * One repository's released requests — the second read, and it exists for a single field.
-   *
-   * The deployment-request detail page draws the lifecycle a version went through, and its last
-   * step is **merged to main**. That is the one fact qits-deployments genuinely cannot know: the
-   * merge happens in the git host after the release, and nothing announces it back. So the page
-   * asks the service that owns the release request, matches by `version`, and reads
-   * `mergedToMainAt`.
-   *
-   * `?state=RELEASED` because an unreleased request has no version to match on, so anything else in
-   * the answer is rows to filter out in the browser.
-   *
-   * A failure here is not the page's failure and the caller treats it as one tile it cannot fill —
-   * everything above the merge is qits-deployments' own answer and stands without this.
-   */
-  async releaseRequests(repoId: string): Promise<readonly ProjectsReleaseRequestDto[]> {
-    const url = await this.url(
-      `/projects/api/repositories/${encodeURIComponent(repoId)}/release-requests?state=RELEASED`,
-    );
-    const response = await firstValueFrom(this.http.get<ProjectsReleaseRequestsResponse>(url));
-    return response.requests;
   }
 }
