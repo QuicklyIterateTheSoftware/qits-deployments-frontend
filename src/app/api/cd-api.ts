@@ -184,29 +184,4 @@ export class CdApi {
     );
     return response.deploymentRequests;
   }
-
-  /**
-   * Every deployment request written for one released version of one repository, newest first.
-   *
-   * The join followed the other way: a link from a release elsewhere on the platform knows a
-   * repository and a version and nothing about the name this platform deploys under — which may be
-   * the repository's, or the `application:` its spec overrides with, and only qits-deployments
-   * knows which. **Both halves are required**, and the server answers 400 for either alone.
-   *
-   * An empty answer is ordinary rather than an error: a library or an SPA releases a version that
-   * deploys nothing at all.
-   */
-  async deploymentRequestsByRelease(
-    repoId: string,
-    version: string,
-  ): Promise<readonly CdDeploymentRequestDto[]> {
-    const params = new HttpParams().set('repoId', repoId).set('version', version);
-    const response = await firstValueFrom(
-      this.http.get<CdDeploymentRequestsResponse>(
-        `${this.base}/deployments/api/deployment-requests`,
-        { params },
-      ),
-    );
-    return response.deploymentRequests;
-  }
 }

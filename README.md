@@ -60,12 +60,15 @@ Two of the verdicts are worth stating out loud:
 `LifecycleFlow` renders and decides nothing: the page owns the data, so the page builds the array.
 
 **`/deployment-requests/by-release/<repoId>/<version>`** is the address a link from a release lands
-on. The linker cannot know the request's id — it is minted here, on the deploy worker, after the
-release — and publishing it back to qits-projects would be a second coordinate system across a
-boundary that carries none. So the route resolves the pair to an id and redirects with `replaceUrl`,
-which keeps the back button pointing at whatever linked here. A miss is a sentence and a retry
-rather than a 404: releasing a version that deploys nothing is the ordinary shape of a library or an
-SPA, and it is also what a release looks like in the seconds before it reaches this service.
+on, and it is no longer resolved here. The linker cannot know the request's id — it is minted here,
+on the deploy worker, after the release — and publishing it back to qits-projects would be a second
+coordinate system across a boundary that carries none. Turning the pair into an id used to be this
+route's own job, with a query of its own and a "no deployment request exists yet" sentence for the
+miss (a library or an SPA releasing nothing, or a release that has not reached this service yet).
+Both the resolving and that sentence moved to the landing app, at
+`/projects/<slug>/deployments/requests/by-release/<repoId>/<version>` (qits-2323), so this address
+is now a full-page hop there, same as the other two — reading `:repoId`, `:version` and `:project`
+straight off the route and making no call of its own.
 
 The detail page polls every six seconds while something is still moving, as a `setTimeout` armed
 **after each answer** rather than a `setInterval` — an interval overlaps its own reads when a

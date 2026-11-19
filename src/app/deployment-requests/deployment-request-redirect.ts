@@ -1,7 +1,6 @@
-import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { QitsAppLinks } from '@qits/ui-components';
+import { injectLandingRedirect } from '../nav/landing-redirect';
 
 /**
  * Where `deployment-requests/:requestId` and `:project/deployment-requests/:requestId` go now that
@@ -19,9 +18,9 @@ import { QitsAppLinks } from '@qits/ui-components';
  * one; the landing app's screen is reached by project and id together, so there is nothing to send
  * an unscoped reader to beyond the landing app's own project picker, `/projects`.
  *
- * **The destination's origin is an async answer, waited on rather than guessed**, and **a
- * full-document navigation, not a router one** — both for the reasons given on
- * {@link DeploymentRequestsRedirect}, which this component otherwise mirrors line for line.
+ * **The waiting, the fallback origin and the full-document navigation are
+ * {@link injectLandingRedirect}'s job**, shared with this folder's other two redirects — this
+ * component's only business is the one relative path.
  *
  * No query parameters are carried: the old detail page read none of its own.
  */
@@ -41,8 +40,6 @@ import { QitsAppLinks } from '@qits/ui-components';
 })
 export class DeploymentRequestRedirect {
   private readonly route = inject(ActivatedRoute);
-  private readonly links = inject(QitsAppLinks);
-  private readonly document = inject(DOCUMENT);
 
   /** This screen's own route parameter — the resource, not a scope. */
   private readonly requestId = this.route.snapshot.paramMap.get('requestId') ?? '';
@@ -55,24 +52,9 @@ export class DeploymentRequestRedirect {
    * Scoped, it is this request's own detail page over there; unscoped, there is no such page, so
    * this falls back to the project picker rather than a path the landing app does not serve.
    */
-  protected readonly link = computed<string | undefined>(() => {
-    const origin = this.links.origin('qits-landing') ?? this.links.environmentOrigin();
-    if (!origin) {
-      return undefined;
-    }
-    const path =
-      this.project && this.requestId
-        ? `/projects/${encodeURIComponent(this.project)}/deployments/requests/${encodeURIComponent(this.requestId)}`
-        : '/projects';
-    return `${origin.replace(/\/+$/, '')}${path}`;
-  });
-
-  constructor() {
-    effect(() => {
-      const link = this.link();
-      if (link) {
-        this.document.location.replace(link);
-      }
-    });
-  }
+  protected readonly link = injectLandingRedirect(() =>
+    this.project && this.requestId
+      ? `/projects/${encodeURIComponent(this.project)}/deployments/requests/${encodeURIComponent(this.requestId)}`
+      : '/projects',
+  );
 }

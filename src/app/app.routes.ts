@@ -1,7 +1,7 @@
 import type { Route, Routes } from '@angular/router';
 import { QitsMainLayout } from '@qits/ui-components';
+import { DeploymentRequestByReleaseRedirect } from './deployment-requests/deployment-request-by-release-redirect';
 import { DeploymentRequestRedirect } from './deployment-requests/deployment-request-redirect';
-import { DeploymentRequestResolver } from './deployment-requests/deployment-request-resolver';
 import { DeploymentRequestsRedirect } from './deployment-requests/deployment-requests-redirect';
 import { DeploymentsPage } from './deployments/deployments-page';
 import { NotFound } from './not-found/not-found';
@@ -31,8 +31,11 @@ import { NotFound } from './not-found/not-found';
  *   lands on the landing app's project picker instead, which is where it is told which project's
  *   requests to show — there is no unscoped listing over there to carry an old bookmark to.
  * - `deployment-requests/by-release/:repoId/:version` — the address a link from a release lands on.
- *   It resolves the id and navigates in-app to `deployment-requests/<id>` below — which now hops on
- *   again rather than being the request's final stop.
+ *   Turning the pair into a request's id used to be this route's own job, with a query of its own;
+ *   that resolving moved to the landing app too, at
+ *   `/projects/<slug>/deployments/requests/by-release/<repoId>/<version>`, so this address is now
+ *   {@link DeploymentRequestByReleaseRedirect} (qits-2323) — the same full-page hop as the other
+ *   two, reading `:repoId` and `:version` off its own route and `:project` off the one above it.
  * - `deployment-requests/:requestId` — one request, end to end. The detail page moved too, to the
  *   landing app at `/projects/<slug>/deployments/requests/<id>` (qits-2322), so this address is
  *   {@link DeploymentRequestRedirect}: the same full-page hop as the list's, reading both
@@ -59,7 +62,7 @@ const OWN: Routes = [
   { path: 'deployment-requests', component: DeploymentRequestsRedirect },
   {
     path: 'deployment-requests/by-release/:repoId/:version',
-    component: DeploymentRequestResolver,
+    component: DeploymentRequestByReleaseRedirect,
   },
   { path: 'deployment-requests/:requestId', component: DeploymentRequestRedirect },
 ];
@@ -69,13 +72,15 @@ const OWN: Routes = [
  *
  * Most pages here never read this parameter: they ask `QITS_SCOPE`, which parses the address the
  * same way in both forms, so one component serves both. On the deployments table the scope seeds
- * the expansion. {@link DeploymentRequestsRedirect} and {@link DeploymentRequestRedirect} are the
- * exception — both read `:project` straight off this route rather than through `QITS_SCOPE`,
- * because neither has a reason to wait on the project list that token's parsing needs: both are
- * leaving this application either way (qits-2315, qits-2322).
+ * the expansion. {@link DeploymentRequestsRedirect}, {@link DeploymentRequestRedirect} and
+ * {@link DeploymentRequestByReleaseRedirect} are the exception — all three read `:project` straight
+ * off this route rather than through `QITS_SCOPE`, because none of them has a reason to wait on the
+ * project list that token's parsing needs: all three are leaving this application either way
+ * (qits-2315, qits-2322, qits-2323).
  *
- * The one parameter {@link DeploymentRequestRedirect} and {@link DeploymentRequestResolver} read
- * off the child route and not here is `:requestId`: it is not a scope, it names the resource.
+ * The parameters {@link DeploymentRequestRedirect} and {@link DeploymentRequestByReleaseRedirect}
+ * read off the child route and not here — `:requestId`, or `:repoId` and `:version` — are not a
+ * scope either; they name the resource.
  *
  * This app is project scoped and not repository scoped: a deployment is of an application, and the
  * table is one row per application under the environment that runs it.

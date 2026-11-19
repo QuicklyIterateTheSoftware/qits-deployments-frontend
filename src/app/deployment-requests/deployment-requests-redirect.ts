@@ -1,7 +1,6 @@
-import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { QitsAppLinks } from '@qits/ui-components';
+import { injectLandingRedirect } from '../nav/landing-redirect';
 
 /**
  * Where `deployment-requests` and `:project/deployment-requests` go now that the list lives in the
@@ -18,18 +17,9 @@ import { QitsAppLinks } from '@qits/ui-components';
  * is always read by project. So the unscoped address lands on the landing app's own project picker,
  * `/projects`, rather than a page that does not exist there.
  *
- * **The destination's origin is an async answer, and this screen waits for it rather than
- * guessing.** `QitsAppLinks.origin('qits-landing')` and its `environmentOrigin()` fallback both come
- * from the platform's navigation, fetched after this application started, so `link` is `undefined`
- * until one of them resolves — and stays that way forever on a platform that never answers. A
- * relative address would be wrong on every host but this one, so there is no fallback that guesses
- * it: with neither origin ever landing, this screen keeps saying where the list moved to without
- * acting on it, rather than sending the reader to this host's own `/projects/...`, which nothing here
- * serves.
- *
- * **A full-document navigation, not a router one.** The destination is a different application
- * entirely, so `Router.navigate` would compile a route this SPA does not have and go nowhere;
- * `document.location.replace` leaves no entry for the back button to return to this redirect.
+ * **The waiting, the fallback origin and the full-document navigation are
+ * {@link injectLandingRedirect}'s job**, shared with this folder's other two redirects — this
+ * component's only business is the one relative path.
  *
  * No query parameters are carried: the old list page read none of its own (qits-2315).
  */
@@ -49,8 +39,6 @@ import { QitsAppLinks } from '@qits/ui-components';
 })
 export class DeploymentRequestsRedirect {
   private readonly route = inject(ActivatedRoute);
-  private readonly links = inject(QitsAppLinks);
-  private readonly document = inject(DOCUMENT);
 
   /** The `:project` segment one level up, or `undefined` at this app's own unscoped route. */
   private readonly project = this.route.snapshot.parent?.paramMap.get('project') ?? undefined;
@@ -60,23 +48,9 @@ export class DeploymentRequestsRedirect {
    * Scoped, it is the project's own listing; unscoped, there is no such listing over there, so this
    * falls back to the project picker rather than a path the landing app does not serve.
    */
-  protected readonly link = computed<string | undefined>(() => {
-    const origin = this.links.origin('qits-landing') ?? this.links.environmentOrigin();
-    if (!origin) {
-      return undefined;
-    }
-    const path = this.project
+  protected readonly link = injectLandingRedirect(() =>
+    this.project
       ? `/projects/${encodeURIComponent(this.project)}/deployments/requests`
-      : '/projects';
-    return `${origin.replace(/\/+$/, '')}${path}`;
-  });
-
-  constructor() {
-    effect(() => {
-      const link = this.link();
-      if (link) {
-        this.document.location.replace(link);
-      }
-    });
-  }
+      : '/projects',
+  );
 }

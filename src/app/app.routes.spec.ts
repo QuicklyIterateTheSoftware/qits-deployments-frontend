@@ -127,20 +127,20 @@ describe('routes', () => {
 
   it('lets the by-release literal win over the id parameter beside it', async () => {
     // The ordering claim. With `:requestId` declared first this address would resolve as a request
-    // whose id is `by-release`, and every link from a release would land on a 404 from the server.
+    // whose id is `by-release`, and every link from a release would land on the project picker
+    // instead — the unscoped fallback below reads an empty `:repoId`/`:version` pair as no release.
     const harness = await RouterTestingHarness.create(
       '/qits/deployment-requests/by-release/repo-ci/2026.903.1',
     );
     await harness.fixture.whenStable();
 
     expect(
-      (harness.routeNativeElement as HTMLElement).querySelector('app-deployment-request-resolver'),
+      (harness.routeNativeElement as HTMLElement).querySelector(
+        'app-deployment-request-by-release-redirect',
+      ),
     ).not.toBeNull();
-    http.expectOne(
-      (request) =>
-        request.url === '/deployments/api/deployment-requests' &&
-        request.params.get('repoId') === 'repo-ci' &&
-        request.params.get('version') === '2026.903.1',
-    );
+    // The redirect reads the pair straight off the route and makes no call of its own — resolving
+    // it into a request now happens in the landing app, on the far side of the hop.
+    http.verify();
   });
 });
